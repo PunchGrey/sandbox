@@ -33,17 +33,22 @@ func (folder FolderLikeLeaf) sortChildItem() {
 }
 
 func main() {
-	fmt.Println("Hi World")
-	folder, err := getListFolder("..", nil)
-	if err != nil {
-		fmt.Println(err)
-	}
-	//	fmt.Println(folder)
-	printListFolder(folder, "\t")
+	/*	folder, err := getListFolder("..", nil)
+		if err != nil {
+			fmt.Println(err)
+		}
+		//	fmt.Println(folder)
+		//printfListFolder(folder, "")
+		fmt.Print(printStringListFolder(folder, ""))*/
+	fmt.Print(dirTree(".."))
 }
 
 func dirTree(myPath string) string {
-	return myPath
+	folder, err := getListFolder(myPath, nil)
+	if err != nil {
+		fmt.Println(err)
+	}
+	return printStringListFolder(folder, "")
 }
 
 func getListFolder(myPath string, parent *FolderLikeLeaf) (*FolderLikeLeaf, error) {
@@ -98,4 +103,52 @@ func printListFolder(listFolder *FolderLikeLeaf, tab string) {
 		fmt.Print(tab)
 		printListFolder(item, tab+"\t")
 	}*/
+}
+
+func printfListFolder(listFolder *FolderLikeLeaf, tab string) {
+	listFolder.sortChildItem()
+	n := len(listFolder.ChildItem)
+	for i, item := range listFolder.ChildItem {
+		if i == n-1 {
+			fmt.Print(tab)
+			fmt.Print("└───")
+			fmt.Println(item.Name())
+			if item.IsDir() == true {
+				printfListFolder(listFolder.getChildFolder(item.Name()), tab+"	")
+			}
+		} else {
+			fmt.Print(tab)
+			fmt.Print("├───")
+			fmt.Println(item.Name())
+			if item.IsDir() == true {
+				printfListFolder(listFolder.getChildFolder(item.Name()), tab+"│	")
+			}
+		}
+	}
+}
+
+func printStringListFolder(listFolder *FolderLikeLeaf, tab string) string {
+	var outStr string
+	listFolder.sortChildItem()
+	n := len(listFolder.ChildItem)
+	for i, item := range listFolder.ChildItem {
+		if i == n-1 {
+			outStr = outStr + tab + "└───" + item.Name() + "\n"
+			//	fmt.Print(tab)
+			//	fmt.Print("└───")
+			//	fmt.Println(item.Name())
+			if item.IsDir() == true {
+				outStr = outStr + printStringListFolder(listFolder.getChildFolder(item.Name()), tab+"	")
+			}
+		} else {
+			//	fmt.Print(tab)
+			//	fmt.Print("├───")
+			//	fmt.Println(item.Name())
+			outStr = outStr + tab + "├───" + item.Name() + "\n"
+			if item.IsDir() == true {
+				outStr = outStr + printStringListFolder(listFolder.getChildFolder(item.Name()), tab+"│	")
+			}
+		}
+	}
+	return outStr
 }
