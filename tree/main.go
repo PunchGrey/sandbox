@@ -12,13 +12,10 @@ import (
 
 // FolderLikeLeaf - спомощью этой структуры создается связанный список папок
 type FolderLikeLeaf struct {
-	Name         string
-	Path         string
-	ChildFolder  []*FolderLikeLeaf
-	ChildFile    []string
-	ChildItem    []os.FileInfo
-	ParentFolder *FolderLikeLeaf
-	RootFolder   *FolderLikeLeaf
+	Name        string
+	Path        string
+	ChildFolder []*FolderLikeLeaf
+	ChildItem   []os.FileInfo
 }
 
 func (folder FolderLikeLeaf) getChildFolder(name string) *FolderLikeLeaf {
@@ -35,13 +32,6 @@ func (folder FolderLikeLeaf) sortChildItem() {
 }
 
 func main() {
-	/*	folder, err := getListFolder("..", nil)
-		if err != nil {
-			fmt.Println(err)
-		}
-		//	fmt.Println(folder)
-		//printfListFolder(folder, "")
-		fmt.Print(printStringListFolder(folder, ""))*/
 	path := flag.String("path", "..", "the root leaf for tree")
 	fileShow := flag.Bool("f", false, "show files")
 	flag.Parse()
@@ -72,17 +62,12 @@ func getListFolder(myPath string, parent *FolderLikeLeaf, fileShow bool) (*Folde
 		return nil, fmt.Errorf("This is a file. The program expects a folder")
 	}
 
-	//	var folder *FolderLikeLeaf
-	folder := &FolderLikeLeaf{Name: stat.Name(), Path: myPath, ParentFolder: parent,
-		ChildFolder: nil, ChildFile: nil}
-	//	folder.Name = stat.Name()
-	//	folder.Path = myPath
-	//	folder.ParentFolder = parent
+	folder := &FolderLikeLeaf{Name: stat.Name(), Path: myPath,
+		ChildFolder: nil}
 	folders, err := ioutil.ReadDir(myPath)
 	if err != nil {
 		return nil, err
 	}
-	//	folder.ChildItem = folders
 	for _, item := range folders {
 		if item.IsDir() == true {
 			childFolder, err := getListFolder(path.Join(myPath, item.Name()), folder, fileShow)
@@ -93,7 +78,6 @@ func getListFolder(myPath string, parent *FolderLikeLeaf, fileShow bool) (*Folde
 			folder.ChildItem = append(folder.ChildItem, item)
 		}
 		if item.IsDir() != true {
-			folder.ChildFile = append(folder.ChildFile, item.Name())
 			if fileShow {
 				folder.ChildItem = append(folder.ChildItem, item)
 			}
@@ -115,10 +99,6 @@ func printListFolder(listFolder *FolderLikeLeaf, tab string) {
 			printListFolder(listFolder.getChildFolder(item.Name()), tab+"\t")
 		}
 	}
-	/*	for _, item := range listFolder.ChildFolder {
-		fmt.Print(tab)
-		printListFolder(item, tab+"\t")
-	}*/
 }
 
 func printfListFolder(listFolder *FolderLikeLeaf, tab string) {
@@ -150,16 +130,10 @@ func printStringListFolder(listFolder *FolderLikeLeaf, tab string) string {
 	for i, item := range listFolder.ChildItem {
 		if i == n-1 {
 			outStr = outStr + tab + "└───" + item.Name() + "\n"
-			//	fmt.Print(tab)
-			//	fmt.Print("└───")
-			//	fmt.Println(item.Name())
 			if item.IsDir() == true {
 				outStr = outStr + printStringListFolder(listFolder.getChildFolder(item.Name()), tab+"	")
 			}
 		} else {
-			//	fmt.Print(tab)
-			//	fmt.Print("├───")
-			//	fmt.Println(item.Name())
 			outStr = outStr + tab + "├───" + item.Name() + "\n"
 			if item.IsDir() == true {
 				outStr = outStr + printStringListFolder(listFolder.getChildFolder(item.Name()), tab+"│	")
@@ -170,19 +144,34 @@ func printStringListFolder(listFolder *FolderLikeLeaf, tab string) string {
 }
 
 func getByteListFolder(listFolder *FolderLikeLeaf, tab string) *bytes.Buffer {
+	var tempStr string
 	outBuffer := new(bytes.Buffer)
 	listFolder.sortChildItem()
 	n := len(listFolder.ChildItem)
 	for i, item := range listFolder.ChildItem {
 		if i == n-1 {
-			outBuffer.WriteString(tab + "└───" + item.Name() + "\n")
 			if item.IsDir() == true {
+				outBuffer.WriteString(tab + "└───" + item.Name() + "\n")
 				outBuffer.Write(getByteListFolder(listFolder.getChildFolder(item.Name()), tab+"	").Bytes())
+			} else {
+				if item.Size() == 0 {
+					tempStr = " (empty)\n"
+				} else {
+					tempStr = fmt.Sprintf(" (%db)\n", item.Size())
+				}
+				outBuffer.WriteString(tab + "└───" + item.Name() + tempStr)
 			}
 		} else {
-			outBuffer.WriteString(tab + "├───" + item.Name() + "\n")
 			if item.IsDir() == true {
+				outBuffer.WriteString(tab + "├───" + item.Name() + "\n")
 				outBuffer.Write(getByteListFolder(listFolder.getChildFolder(item.Name()), tab+"│	").Bytes())
+			} else {
+				if item.Size() == 0 {
+					tempStr = " (empty)\n"
+				} else {
+					tempStr = fmt.Sprintf(" (%db)\n", item.Size())
+				}
+				outBuffer.WriteString(tab + "├───" + item.Name() + tempStr)
 			}
 		}
 	}
