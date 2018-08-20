@@ -87,6 +87,7 @@ func getListFolder(myPath string, parent *FolderLikeLeaf, fileShow bool) (*Folde
 	return folder, err
 }
 
+//rudiment
 func printListFolder(listFolder *FolderLikeLeaf, tab string) {
 	fmt.Println(listFolder.Name)
 	listFolder.sortChildItem()
@@ -101,6 +102,7 @@ func printListFolder(listFolder *FolderLikeLeaf, tab string) {
 	}
 }
 
+//rudiment
 func printfListFolder(listFolder *FolderLikeLeaf, tab string) {
 	listFolder.sortChildItem()
 	n := len(listFolder.ChildItem)
@@ -123,6 +125,7 @@ func printfListFolder(listFolder *FolderLikeLeaf, tab string) {
 	}
 }
 
+//rudiment
 func printStringListFolder(listFolder *FolderLikeLeaf, tab string) string {
 	var outStr string
 	listFolder.sortChildItem()
