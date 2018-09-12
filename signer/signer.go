@@ -15,10 +15,16 @@ func main() {
 		job(func(in, out chan interface{}) {
 			val := <-in
 			out <- 2 * val.(int)
+			out <- 3 * val.(int)
+			out <- 2 * val.(int)
+			out <- 3 * val.(int)
 		}),
 		job(SingleHash),
 		(MultiHash),
 		job(func(in, out chan interface{}) {
+			fmt.Println("result: ", <-in)
+			fmt.Println("result: ", <-in)
+			fmt.Println("result: ", <-in)
 			fmt.Println("result: ", <-in)
 		}),
 	}
@@ -30,8 +36,8 @@ func main() {
 
 //ExecutePipeline функция обрабатывающая последлвательно массив функций, типа job
 func ExecutePipeline(jobs ...job) {
-	in := make(chan interface{}, 1)
-	out := make(chan interface{}, 1)
+	in := make(chan interface{}, 200)
+	out := make(chan interface{}, 200)
 	for i, itemJob := range jobs {
 		if i%2 != 0 {
 			fmt.Println("not", i%2)
@@ -45,20 +51,54 @@ func ExecutePipeline(jobs ...job) {
 
 //SingleHash считает значение crc32(data)+"~"+crc32(md5(data))
 func SingleHash(in, out chan interface{}) {
-	dataRaw := <-in
-	//test
-	fmt.Println(dataRaw)
-	intData, ok := (dataRaw.(int))
-	if !ok {
-		log.Fatal("con't convert data to string")
+	wgsh := &sync.WaitGroup{}
+
+	for {
+		select {
+		case dataRaw := <-in:
+			wgsh.Add(1)
+			fmt.Println(dataRaw)
+			go func(dataRaw interface{}, out chan interface{}) {
+				defer wgsh.Done()
+				intData, ok := (dataRaw.(int))
+				if !ok {
+					log.Fatal("con't convert data to string")
+				}
+				data := string(intData)
+				result := DataSignerCrc32(data) + "~" + DataSignerCrc32(DataSignerMd5(data))
+				out <- result
+			}(dataRaw, out)
+		default:
+			wgsh.Wait()
+			return
+		}
 	}
-	data := string(intData)
-	result := DataSignerCrc32(data) + "~" + DataSignerCrc32(DataSignerMd5(data))
-	out <- result
 }
 
 //MultiHash считает значение crc32(th+data)
 func MultiHash(in, out chan interface{}) {
+	wgsh := &sync.WaitGroup{}
+	for {
+		select {
+		case dataRaw := <-in:
+			wgsh.Add(1)
+			go func(dataRaw interface{}, out chan interface{}) {
+				defer wgsh.Done()
+				data, ok := (dataRaw.(string))
+				if !ok {
+					log.Fatal("con't convert data to string")
+				}
+				result := multiHashOne(data)
+				out <- result
+			}(dataRaw, out)
+		default:
+			wgsh.Wait()
+			return
+		}
+	}
+}
+
+func multiHashOne(data string) string {
 	type numAndData struct {
 		data string
 		num  int
@@ -68,13 +108,6 @@ func MultiHash(in, out chan interface{}) {
 	mh := make(chan numAndData, 6)
 	end := make(chan struct{})
 	wg := &sync.WaitGroup{}
-
-	dataRaw := <-in
-	data, ok := dataRaw.(string)
-
-	if !ok {
-		log.Fatal("con't convert data to string")
-	}
 
 	for i := 0; i < 6; i++ {
 		wg.Add(1)
@@ -102,6 +135,5 @@ LOOP:
 	for _, item := range arrResult {
 		result = result + item
 	}
-	out <- result
-
+	return result
 }
