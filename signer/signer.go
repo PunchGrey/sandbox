@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"log"
+	"sync"
 )
 
 func main() {
@@ -9,14 +11,15 @@ func main() {
 	folowJobs := []job{
 		job(func(in, out chan interface{}) {
 			out <- int(3)
-			close(out)
 		}),
 		job(func(in, out chan interface{}) {
 			val := <-in
 			out <- 2 * val.(int)
 		}),
+		job(SingleHash),
+		(MultiHash),
 		job(func(in, out chan interface{}) {
-			fmt.Println(<-in)
+			fmt.Println("result: ", <-in)
 		}),
 	}
 
@@ -32,11 +35,73 @@ func ExecutePipeline(jobs ...job) {
 	for i, itemJob := range jobs {
 		if i%2 != 0 {
 			fmt.Println("not", i%2)
-			itemJob(in, out)
+			itemJob(out, in)
 		} else {
 			fmt.Println("eq", i%2)
-			itemJob(out, in)
+			itemJob(in, out)
 		}
 	}
+}
+
+//SingleHash считает значение crc32(data)+"~"+crc32(md5(data))
+func SingleHash(in, out chan interface{}) {
+	dataRaw := <-in
+	//test
+	fmt.Println(dataRaw)
+	intData, ok := (dataRaw.(int))
+	if !ok {
+		log.Fatal("con't convert data to string")
+	}
+	data := string(intData)
+	result := DataSignerCrc32(data) + "~" + DataSignerCrc32(DataSignerMd5(data))
+	out <- result
+}
+
+//MultiHash считает значение crc32(th+data)
+func MultiHash(in, out chan interface{}) {
+	type numAndData struct {
+		data string
+		num  int
+	}
+	var arrResult [6]string
+	var result string
+	mh := make(chan numAndData, 6)
+	end := make(chan struct{})
+	wg := &sync.WaitGroup{}
+
+	dataRaw := <-in
+	data, ok := dataRaw.(string)
+
+	if !ok {
+		log.Fatal("con't convert data to string")
+	}
+
+	for i := 0; i < 6; i++ {
+		wg.Add(1)
+		go func(th int) {
+			mh <- numAndData{data: DataSignerCrc32(string(th) + data), num: th}
+		}(i)
+	}
+
+	go func(end chan struct{}) {
+		wg.Wait()
+		end <- struct{}{}
+	}(end)
+
+LOOP:
+	for {
+		select {
+		case item := <-mh:
+			arrResult[item.num] = item.data
+			wg.Done()
+		case <-end:
+			break LOOP
+		}
+	}
+
+	for _, item := range arrResult {
+		result = result + item
+	}
+	out <- result
 
 }
