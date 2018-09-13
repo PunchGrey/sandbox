@@ -18,13 +18,12 @@ func main() {
 			out <- 3 * val.(int)
 			out <- 2 * val.(int)
 			out <- 3 * val.(int)
+			out <- 5 * val.(int)
 		}),
 		job(SingleHash),
-		(MultiHash),
+		job(MultiHash),
+		job(CombineResults),
 		job(func(in, out chan interface{}) {
-			fmt.Println("result: ", <-in)
-			fmt.Println("result: ", <-in)
-			fmt.Println("result: ", <-in)
 			fmt.Println("result: ", <-in)
 		}),
 	}
@@ -52,6 +51,7 @@ func ExecutePipeline(jobs ...job) {
 //SingleHash считает значение crc32(data)+"~"+crc32(md5(data))
 func SingleHash(in, out chan interface{}) {
 	wgsh := &sync.WaitGroup{}
+	mu := &sync.Mutex{}
 
 	for {
 		select {
@@ -60,12 +60,21 @@ func SingleHash(in, out chan interface{}) {
 			fmt.Println(dataRaw)
 			go func(dataRaw interface{}, out chan interface{}) {
 				defer wgsh.Done()
+				var dataMd5 string
 				intData, ok := (dataRaw.(int))
 				if !ok {
 					log.Fatal("con't convert data to string")
 				}
 				data := string(intData)
-				result := DataSignerCrc32(data) + "~" + DataSignerCrc32(DataSignerMd5(data))
+				mu.Lock()
+				for {
+					if dataSignerOverheat == 0 {
+						dataMd5 = DataSignerMd5(data)
+						break
+					}
+				}
+				mu.Unlock()
+				result := DataSignerCrc32(data) + "~" + DataSignerCrc32(dataMd5)
 				out <- result
 			}(dataRaw, out)
 		default:
@@ -136,4 +145,29 @@ LOOP:
 		result = result + item
 	}
 	return result
+}
+
+//CombineResults получает все результаты, сортирует, объединяет отсортированный результат через _
+func CombineResults(in, out chan interface{}) {
+	var sliceResult []string
+	var result string
+LOOPC:
+	for {
+		select {
+		case dataRaw := <-in:
+			sliceResult = append(sliceResult, dataRaw.(string))
+		default:
+			break LOOPC
+		}
+	}
+
+	for i, item := range sliceResult {
+		if i == 0 {
+			result = result + item
+		} else {
+			result = result + "_" + item
+		}
+		result = result + item
+	}
+	out <- result
 }
