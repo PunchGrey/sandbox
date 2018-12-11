@@ -9,7 +9,7 @@ import (
 
 const (
 	BotToken   = "702709092:AAFNpizXtquhDmL1qhVVdYrdDbOuZ7mD8GM"
-	WebhookURL = "https://167.99.137.134:88"
+	WebhookURL = "https://167.99.137.134:8443"
 )
 
 func main() {
@@ -27,10 +27,11 @@ func main() {
 
 	updates := bot.ListenForWebhook("/")
 
-	go http.ListenAndServe(":88", nil)
-	fmt.Println("start listen :88")
+	go http.ListenAndServeTLS(":8433", "cert/cert.pem", "cert/key.pem", nil)
+	fmt.Println("start listen :8443")
 
 	for update := range updates {
+
 		if "gutar" == update.Message.Text {
 			bot.Send(tgbotapi.NewMessage(
 				update.Message.Chat.ID,
