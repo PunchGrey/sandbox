@@ -6,16 +6,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mongodb/mongo-go-driver/bson"
 	"github.com/mongodb/mongo-go-driver/mongo"
 	"github.com/mongodb/mongo-go-driver/mongo/options"
 	"github.com/mongodb/mongo-go-driver/x/network/connstring"
 )
 
 type AlertMessage struct {
-	date    time.Time
-	id      int64
-	message string
+	Date    time.Time
+	Id      int64
+	Message string
 }
 
 func parseTelegramMessage(id int64, command string, message string) AlertMessage {
@@ -27,9 +26,9 @@ func parseTelegramMessage(id int64, command string, message string) AlertMessage
 	}
 	t, _ := time.Parse(time.RFC3339, tempArr[0])
 	return AlertMessage{
-		date:    t,
-		id:      id,
-		message: tempArr[1],
+		Date:    t,
+		Id:      id,
+		Message: tempArr[1],
 	}
 }
 
@@ -48,16 +47,41 @@ func main() {
 	}
 	fmt.Println(client)
 
+	//запись в mongo
+
 	collection := client.Database("data_alarm").Collection("test")
-	fmt.Println(collection)
-	ctx, _ = context.WithTimeout(context.Background(), 5*time.Second)
+	fmt.Println(collection) /*
+		ctx, _ = context.WithTimeout(context.Background(), 5*time.Second)
 
-	testAlert := parseTelegramMessage(777, "set", "2018-12-19T18:47:00+03:00 message_t")
+		testAlert := parseTelegramMessage(777, "set", "2018-12-19T18:47:00+03:00 message_t")
 
-	res, err := collection.InsertOne(ctx, bson.M{"id": testAlert.id, "date": testAlert.date, "message": testAlert.message})
+		res, err := collection.InsertOne(ctx, bson.M{"id": testAlert.Id, "date": testAlert.Date, "message": testAlert.Message})
+		if err != nil {
+			fmt.Println(err)
+		} else {
+			fmt.Println(res.InsertedID)
+		}
+	*/
+	//чтение из mongo
+	ctx, _ = context.WithTimeout(context.Background(), 10*time.Second)
+	cur, err := collection.Find(ctx, nil)
 	if err != nil {
 		fmt.Println(err)
-	} else {
-		fmt.Println(res.InsertedID)
 	}
+	defer cur.Close(ctx)
+	for cur.Next(ctx) {
+		//var result bson.M
+		var testAlart2 AlertMessage
+		err := cur.Decode(&testAlart2)
+		if err != nil {
+			fmt.Println(err)
+		}
+
+		fmt.Println(testAlart2.Date)
+
+	}
+	if err := cur.Err(); err != nil {
+		fmt.Println(err)
+	}
+
 }
