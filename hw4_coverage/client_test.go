@@ -1,17 +1,23 @@
 package main
 
 import (
+	"encoding/json"
 	"encoding/xml"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"reflect"
+	"strconv"
 	"testing"
 )
 
 // код писать тут
+const (
+	xmlFile = "dataset.xml"
+)
 
 func getUsers(xmlFile string) []User {
 	type XMLRow struct {
@@ -68,8 +74,35 @@ func SearchServer(w http.ResponseWriter, r *http.Request) {
 	accessToken := "7777" //токен для авторизации
 	at := r.Header.Get("AccessToken")
 	if accessToken != at {
-		io.WriteString(w, `{"status": 401, "err": "not not authorized"}`)
+		io.WriteString(w, `{"Error": "Bad AccessToken"}`)
 	}
+
+	limit, err := strconv.Atoi(r.FormValue("limit"))
+	if err != nil {
+		io.WriteString(w, `{"Error": "error convert  string  to int for limit"}`)
+		return
+	}
+	//	offset, err := strconv.Atoi(r.FormValue("offset"))
+	//	if err != nil {
+	//		io.WriteString(w, `{"Error": "error convert  string  to int for offset"}`)
+	//		return
+	//	}
+	query := r.FormValue("query")
+	//	order_field := r.FormValue("order_field")
+	//	order_by, err := strconv.Atoi(r.FormValue("order_by"))
+	//	if err != nil {
+	//		io.WriteString(w, `{"Error": "error convert  string  to int for order_by"}`)
+	//		return
+	//	}
+	users := getUsers(xmlFile)
+	if query == "" {
+		jsonString, err := json.Marshal(users[0:limit])
+		if err != nil {
+			io.WriteString(w, `{"Error": "cant pack in json"}`)
+		}
+		fmt.Fprintln(w, jsonString)
+	}
+
 }
 
 func TestGetUser(t *testing.T) {
@@ -88,7 +121,7 @@ func TestFindUasers(t *testing.T) {
 	searchReq := SearchRequest{
 		Limit:      10,
 		Offset:     0,
-		Query:      "Wolf",
+		Query:      "",
 		OrderField: "Name",
 		OrderBy:    0,
 	}
