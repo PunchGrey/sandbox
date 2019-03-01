@@ -10,7 +10,9 @@ import (
 	"net/http/httptest"
 	"os"
 	"reflect"
+	"sort"
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -70,6 +72,71 @@ func getUsers(xmlFile string) []User {
 	return users
 }
 
+func selectUsers(users []User, query string) []User {
+	if query == "" {
+		return users
+	}
+
+	outUsers := make([]User, 0, len(users))
+	for _, item := range users {
+		if strings.Contains(item.Name, query) && strings.Contains(item.About, query) {
+			outUsers = append(outUsers, item)
+		}
+	}
+	return outUsers
+}
+
+func orderUsers(users []User, orderField string, orderBy int) ([]User, error) {
+	if orderBy < -1 || orderBy > 1 {
+		return nil, fmt.Errorf("incorrect orderBy")
+	}
+	if orderBy == 0 {
+		return users, nil
+	}
+
+	if orderField == "" {
+		orderField = "Name"
+	}
+	switch orderField {
+	case "Id":
+		if orderBy == 1 {
+			sort.Slice(users, func(i, j int) bool {
+				return users[i].Id > users[j].Id
+			})
+		} else {
+			sort.Slice(users, func(i, j int) bool {
+				return users[i].Id < users[j].Id
+			})
+		}
+		return users, nil
+	case "Age":
+		if orderBy == 1 {
+			sort.Slice(users, func(i, j int) bool {
+				return users[i].Age > users[j].Age
+			})
+		} else {
+			sort.Slice(users, func(i, j int) bool {
+				return users[i].Age < users[j].Age
+			})
+		}
+		return users, nil
+	case "Name":
+		if orderBy == 1 {
+			sort.Slice(users, func(i, j int) bool {
+				return users[i].Name > users[j].Name
+			})
+		} else {
+			sort.Slice(users, func(i, j int) bool {
+				return users[i].Name < users[j].Name
+			})
+		}
+		return users, nil
+	default:
+		return nil, fmt.Errorf("incorrect orderField")
+
+	}
+}
+
 func SearchServer(w http.ResponseWriter, r *http.Request) {
 	accessToken := "7777" //токен для авторизации
 	at := r.Header.Get("AccessToken")
@@ -88,19 +155,27 @@ func SearchServer(w http.ResponseWriter, r *http.Request) {
 	//		return
 	//	}
 	query := r.FormValue("query")
-	//	order_field := r.FormValue("order_field")
-	//	order_by, err := strconv.Atoi(r.FormValue("order_by"))
-	//	if err != nil {
-	//		io.WriteString(w, `{"Error": "error convert  string  to int for order_by"}`)
-	//		return
-	//	}
+	orderField := r.FormValue("orderField")
+	orderBy, err := strconv.Atoi(r.FormValue("orderBy"))
+	if err != nil {
+		io.WriteString(w, `{"Error": "error convert  string  to int for orderBy"}`)
+		return
+	}
 	users := getUsers(xmlFile)
-	if query == "" {
+	users = selectUsers(users, query)
+	users, err = orderUsers(users, orderField, orderBy)
+	if len(users) > limit {
 		jsonString, err := json.Marshal(users[0:limit])
 		if err != nil {
 			io.WriteString(w, `{"Error": "cant pack in json"}`)
 		}
-		fmt.Fprintln(w, jsonString)
+		w.Write(jsonString)
+	} else {
+		jsonString, err := json.Marshal(users)
+		if err != nil {
+			io.WriteString(w, `{"Error": "cant pack in json"}`)
+		}
+		w.Write(jsonString)
 	}
 
 }
