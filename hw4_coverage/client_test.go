@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 // код писать тут
@@ -79,7 +80,7 @@ func selectUsers(users []User, query string) []User {
 
 	outUsers := make([]User, 0, len(users))
 	for _, item := range users {
-		if strings.Contains(item.Name, query) && strings.Contains(item.About, query) {
+		if strings.Contains(item.Name, query) || strings.Contains(item.About, query) {
 			outUsers = append(outUsers, item)
 		}
 	}
@@ -101,33 +102,33 @@ func orderUsers(users []User, orderField string, orderBy int) ([]User, error) {
 	case "Id":
 		if orderBy == 1 {
 			sort.Slice(users, func(i, j int) bool {
-				return users[i].Id > users[j].Id
+				return users[i].Id < users[j].Id
 			})
 		} else {
 			sort.Slice(users, func(i, j int) bool {
-				return users[i].Id < users[j].Id
+				return users[i].Id > users[j].Id
 			})
 		}
 		return users, nil
 	case "Age":
 		if orderBy == 1 {
 			sort.Slice(users, func(i, j int) bool {
-				return users[i].Age > users[j].Age
+				return users[i].Age < users[j].Age
 			})
 		} else {
 			sort.Slice(users, func(i, j int) bool {
-				return users[i].Age < users[j].Age
+				return users[i].Age > users[j].Age
 			})
 		}
 		return users, nil
 	case "Name":
 		if orderBy == 1 {
 			sort.Slice(users, func(i, j int) bool {
-				return users[i].Name > users[j].Name
+				return users[i].Name < users[j].Name
 			})
 		} else {
 			sort.Slice(users, func(i, j int) bool {
-				return users[i].Name < users[j].Name
+				return users[i].Name > users[j].Name
 			})
 		}
 		return users, nil
@@ -141,6 +142,7 @@ func SearchServer(w http.ResponseWriter, r *http.Request) {
 	accessToken := "7777" //токен для авторизации
 	at := r.Header.Get("AccessToken")
 	if accessToken != at {
+		w.WriteHeader(http.StatusUnauthorized)
 		io.WriteString(w, `{"Error": "Bad AccessToken"}`)
 	}
 
@@ -149,14 +151,23 @@ func SearchServer(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(w, `{"Error": "error convert  string  to int for limit"}`)
 		return
 	}
-	//	offset, err := strconv.Atoi(r.FormValue("offset"))
-	//	if err != nil {
-	//		io.WriteString(w, `{"Error": "error convert  string  to int for offset"}`)
-	//		return
-	//	}
+	offset, err := strconv.Atoi(r.FormValue("offset"))
+	if err != nil {
+		io.WriteString(w, `{"Error": "error convert  string  to int for offset"}`)
+		return
+	}
 	query := r.FormValue("query")
-	orderField := r.FormValue("orderField")
-	orderBy, err := strconv.Atoi(r.FormValue("orderBy"))
+	if query == "enimForTimeOut" {
+		time.Sleep(5 * time.Second)
+		w.WriteHeader(http.StatusGatewayTimeout)
+	}
+	if query == "enumStatusInternalServerError" {
+		w.WriteHeader(http.StatusInternalServerError)
+		io.WriteString(w, `{"Error": "internal server error"}`)
+	}
+
+	orderField := r.FormValue("order_field")
+	orderBy, err := strconv.Atoi(r.FormValue("order_by"))
 	if err != nil {
 		io.WriteString(w, `{"Error": "error convert  string  to int for orderBy"}`)
 		return
@@ -164,14 +175,22 @@ func SearchServer(w http.ResponseWriter, r *http.Request) {
 	users := getUsers(xmlFile)
 	users = selectUsers(users, query)
 	users, err = orderUsers(users, orderField, orderBy)
-	if len(users) > limit {
-		jsonString, err := json.Marshal(users[0:limit])
+	if len(users) < offset {
+		jsonString, err := json.Marshal([]User{})
+		if err != nil {
+			io.WriteString(w, `{"Error": "cant pack in json empty array"}`)
+		}
+		w.Write(jsonString)
+		return
+	}
+	if len(users) > offset+limit {
+		jsonString, err := json.Marshal(users[offset : offset+limit])
 		if err != nil {
 			io.WriteString(w, `{"Error": "cant pack in json"}`)
 		}
 		w.Write(jsonString)
 	} else {
-		jsonString, err := json.Marshal(users)
+		jsonString, err := json.Marshal(users[offset:len(users)])
 		if err != nil {
 			io.WriteString(w, `{"Error": "cant pack in json"}`)
 		}
@@ -189,24 +208,150 @@ func TestGetUser(t *testing.T) {
 	}
 }
 
-func TestFindUasers(t *testing.T) {
+func TestFindUsers(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(SearchServer))
 
 	sc := &SearchClient{AccessToken: "7777", URL: ts.URL}
 	searchReq := SearchRequest{
 		Limit:      10,
-		Offset:     0,
-		Query:      "",
-		OrderField: "Name",
-		OrderBy:    0,
+		Offset:     20,
+		Query:      "enim",
+		OrderField: "Id",
+		OrderBy:    -1,
 	}
 	searchRes, err := sc.FindUsers(searchReq)
 	if err != nil {
 		t.Errorf("unexpected error: %#v", err)
 		return
 	}
-	if len(searchRes.Users) < 1 {
+	if len(searchRes.Users) != 0 {
 		t.Errorf("unexpected value: %#v", searchRes.Users)
 	}
 
 }
+
+func TestFindUsersLimit(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(SearchServer))
+
+	sc := &SearchClient{AccessToken: "7777", URL: ts.URL}
+	searchReq := SearchRequest{
+		Limit:      -1,
+		Offset:     20,
+		Query:      "enim",
+		OrderField: "Id",
+		OrderBy:    -1,
+	}
+	_, err := sc.FindUsers(searchReq)
+	if err == nil {
+		t.Errorf("unexpected error %v, expected error %s", err, "limit must be > 0")
+	}
+	if err.Error() != "limit must be > 0" {
+		t.Errorf("unexpected error %s, expected error %s", err.Error(), "limit must be > 0")
+	}
+
+	searchReq = SearchRequest{
+		Limit:      30,
+		Offset:     0,
+		Query:      "",
+		OrderField: "Id",
+		OrderBy:    0,
+	}
+	searchRes, err := sc.FindUsers(searchReq)
+	if len(searchRes.Users) != 25 {
+		t.Errorf("unexpected value  len(searchRes.Users) %d", len(searchRes.Users))
+	}
+}
+
+func TestFindUsersOffset(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(SearchServer))
+
+	sc := &SearchClient{AccessToken: "7777", URL: ts.URL}
+
+	searchReq := SearchRequest{
+		Limit:      10,
+		Offset:     -1,
+		Query:      "",
+		OrderField: "Id",
+		OrderBy:    0,
+	}
+	_, err := sc.FindUsers(searchReq)
+	if err == nil {
+		t.Errorf("unexpected error %v, expected error %s", err, "offset must be > 0")
+	}
+	if err.Error() != "offset must be > 0" {
+		t.Errorf("unexpected error %s, expected error %s", err.Error(), "offset must be > 0")
+	}
+}
+
+func TestFindUsersTimeOut(t *testing.T) {
+	//handlerFunc := http.HandlerFunc(SearchServer)
+	//ts := httptest.NewServer(http.TimeoutHandler(handlerFunc, 1*time.Millisecond, "server timeout"))
+
+	//ts := httptest.NewServer(http.HandlerFunc(SearchServer))
+	//sc := &SearchClient{AccessToken: "7777", URL: ts.URL}
+	sc := &SearchClient{AccessToken: "7777", URL: "http://127.0.0.1:3560"}
+
+	searchReq := SearchRequest{
+		Limit:      25,
+		Offset:     0,
+		Query:      "enimForTimeOut",
+		OrderField: "Name",
+		OrderBy:    1,
+	}
+	_, err := sc.FindUsers(searchReq)
+	if !strings.HasPrefix(err.Error(), "unknown error") {
+		t.Errorf("unexpected error %s, expected error %s", err.Error(), "unknown error ...")
+	}
+
+	ts := httptest.NewServer(http.HandlerFunc(SearchServer))
+	sc = &SearchClient{AccessToken: "7777", URL: ts.URL}
+	_, err = sc.FindUsers(searchReq)
+
+	if !strings.HasPrefix(err.Error(), "timeout for") {
+		t.Errorf("unexpected error %s, expected error %s", err.Error(), "timeout for...")
+	}
+}
+
+func TestFindUsersAuth(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(SearchServer))
+
+	sc := &SearchClient{AccessToken: "77776666", URL: ts.URL}
+	searchReq := SearchRequest{
+		Limit:      25,
+		Offset:     0,
+		Query:      "enim",
+		OrderField: "Id",
+		OrderBy:    -1,
+	}
+	_, err := sc.FindUsers(searchReq)
+	if err.Error() != "Bad AccessToken" {
+		t.Errorf("unexpected error %s, expected error %s", err.Error(), "Bad AccessToken")
+	}
+}
+
+func TestFindUserInternalServerError(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(SearchServer))
+	sc := &SearchClient{AccessToken: "7777", URL: ts.URL}
+	searchReq := SearchRequest{
+		Limit:      25,
+		Offset:     0,
+		Query:      "enumStatusInternalServerError",
+		OrderField: "Id",
+		OrderBy:    -1,
+	}
+	_, err := sc.FindUsers(searchReq)
+	if err.Error() != "SearchServer fatal error" {
+		t.Errorf("unexpected error %s, expected error %s", err.Error(), "SearchServer fatal error")
+	}
+}
+
+/*
+    client := http.Client{
+        Timeout: time.Duration(5 * time.Millisecond),
+    }
+
+    _, err := client.Get("https://golangcode.com")
+    if err != nil {
+        log.Fatal(err)
+	}
+*/
