@@ -133,7 +133,7 @@ func orderUsers(users []User, orderField string, orderBy int) ([]User, error) {
 		}
 		return users, nil
 	default:
-		return nil, fmt.Errorf("incorrect orderField")
+		return nil, fmt.Errorf("ErrorBadOrderField")
 
 	}
 }
@@ -160,10 +160,22 @@ func SearchServer(w http.ResponseWriter, r *http.Request) {
 	if query == "enimForTimeOut" {
 		time.Sleep(5 * time.Second)
 		w.WriteHeader(http.StatusGatewayTimeout)
+		return
 	}
 	if query == "enumStatusInternalServerError" {
 		w.WriteHeader(http.StatusInternalServerError)
 		io.WriteString(w, `{"Error": "internal server error"}`)
+		return
+	}
+	if query == "enumStatusBadRequestCantUnpack" {
+		w.WriteHeader(http.StatusBadRequest)
+		io.WriteString(w, `[internal server error"]`)
+		return
+	}
+	if query == "enumUnknownBadRequest" {
+		w.WriteHeader(http.StatusBadRequest)
+		io.WriteString(w, `{"Error": "unknown bad request"}`)
+		return
 	}
 
 	orderField := r.FormValue("order_field")
@@ -175,6 +187,11 @@ func SearchServer(w http.ResponseWriter, r *http.Request) {
 	users := getUsers(xmlFile)
 	users = selectUsers(users, query)
 	users, err = orderUsers(users, orderField, orderBy)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		io.WriteString(w, `{"Error": "`+err.Error()+`"}`)
+		return
+	}
 	if len(users) < offset {
 		jsonString, err := json.Marshal([]User{})
 		if err != nil {
@@ -342,6 +359,46 @@ func TestFindUserInternalServerError(t *testing.T) {
 	_, err := sc.FindUsers(searchReq)
 	if err.Error() != "SearchServer fatal error" {
 		t.Errorf("unexpected error %s, expected error %s", err.Error(), "SearchServer fatal error")
+	}
+}
+
+func TestBadRequest(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(SearchServer))
+	sc := &SearchClient{AccessToken: "7777", URL: ts.URL}
+	searchReq := SearchRequest{
+		Limit:      25,
+		Offset:     0,
+		Query:      "enumStatusBadRequestCantUnpack",
+		OrderField: "Id",
+		OrderBy:    -1,
+	}
+	_, err := sc.FindUsers(searchReq)
+	if !strings.HasPrefix(err.Error(), "cant unpack error json") {
+		t.Errorf("unexpected error %s, expected error %s", err.Error(), "cant unpack error json...")
+	}
+
+	searchReq = SearchRequest{
+		Limit:      25,
+		Offset:     0,
+		Query:      "enum",
+		OrderField: "Gender",
+		OrderBy:    -1,
+	}
+	_, err = sc.FindUsers(searchReq)
+	if !strings.HasPrefix(err.Error(), "OrderFeld") {
+		t.Errorf("unexpected error %s, expected error %s", err.Error(), "OrderFeld...")
+	}
+
+	searchReq = SearchRequest{
+		Limit:      25,
+		Offset:     0,
+		Query:      "enumUnknownBadRequest",
+		OrderField: "Id",
+		OrderBy:    -1,
+	}
+	_, err = sc.FindUsers(searchReq)
+	if !strings.HasPrefix(err.Error(), "unknown bad request error") {
+		t.Errorf("unexpected error %s, expected error %s", err.Error(), "unknown bad request error...")
 	}
 }
 
