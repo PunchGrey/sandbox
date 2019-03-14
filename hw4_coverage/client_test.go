@@ -177,6 +177,10 @@ func SearchServer(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(w, `{"Error": "unknown bad request"}`)
 		return
 	}
+	if query == "enumCantUnpackJsonArrray" {
+		io.WriteString(w, `{"Error": "enumCantUnpackJsonArrray"}`)
+		return
+	}
 
 	orderField := r.FormValue("order_field")
 	orderBy, err := strconv.Atoi(r.FormValue("order_by"))
@@ -399,6 +403,56 @@ func TestBadRequest(t *testing.T) {
 	_, err = sc.FindUsers(searchReq)
 	if !strings.HasPrefix(err.Error(), "unknown bad request error") {
 		t.Errorf("unexpected error %s, expected error %s", err.Error(), "unknown bad request error...")
+	}
+}
+
+func TestCantUnpackJsonArrray(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(SearchServer))
+	sc := &SearchClient{AccessToken: "7777", URL: ts.URL}
+	searchReq := SearchRequest{
+		Limit:      25,
+		Offset:     0,
+		Query:      "enumCantUnpackJsonArrray",
+		OrderField: "Id",
+		OrderBy:    -1,
+	}
+	_, err := sc.FindUsers(searchReq)
+	if !strings.HasPrefix(err.Error(), "cant unpack result json:") {
+		t.Errorf("unexpected error %s, expected error %s", err.Error(), "cant unpack result json:...")
+	}
+}
+
+func TestLenDataEqualLimit(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(SearchServer))
+	sc := &SearchClient{AccessToken: "7777", URL: ts.URL}
+	searchReq := SearchRequest{
+		Limit:      17,
+		Offset:     0,
+		Query:      "enim",
+		OrderField: "Id",
+		OrderBy:    -1,
+	}
+	result, err := sc.FindUsers(searchReq)
+	if err != nil {
+		t.Errorf("unexpected error %s, expected error nil", err.Error())
+	}
+	if len(result.Users) != searchReq.Limit {
+		t.Errorf("unexpected voluem %d, expected error %d", len(result.Users), searchReq.Limit)
+	}
+
+	searchReq = SearchRequest{
+		Limit:      20,
+		Offset:     0,
+		Query:      "enim",
+		OrderField: "Id",
+		OrderBy:    -1,
+	}
+	result, err = sc.FindUsers(searchReq)
+	if err != nil {
+		t.Errorf("unexpected error %s, expected error nil", err.Error())
+	}
+	if len(result.Users) == searchReq.Limit {
+		t.Errorf("unexpected voluem %d equel limit", len(result.Users))
 	}
 }
 
