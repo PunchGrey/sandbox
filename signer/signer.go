@@ -122,7 +122,7 @@ func main() {
 //ExecutePipeline функция обрабатывающая последлвательно массив функций, типа job
 func ExecutePipeline(jobs ...job) {
 	wgGlob := &sync.WaitGroup{}
-	mu := &sync.Mutex{}
+	//	mu := &sync.Mutex{}
 	l := len(jobs)
 	if l == 0 {
 		return
@@ -146,10 +146,10 @@ func ExecutePipeline(jobs ...job) {
 		go func(i int, itemJob job) {
 			defer wgGlob.Done()
 			defer close(tube[i])
-			mu.Lock()
+			//	mu.Lock()
 			itemJob(tube[i-1], tube[i])
 
-			mu.Unlock()
+			//	mu.Unlock()
 		}(i+1, itemJob)
 		time.Sleep(time.Millisecond)
 	}
