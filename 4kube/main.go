@@ -41,5 +41,8 @@ func main() {
 	flag.Parse()
 
 	http.HandleFunc("/", handlerHostName)
-	http.ListenAndServe("localhost:8080", nil)
+	err := http.ListenAndServe("0.0.0.0:8080", nil)
+	if err != nil {
+		fmt.Println(err.Error())
+	}
 }
