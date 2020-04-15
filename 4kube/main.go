@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"strconv"
@@ -24,15 +25,59 @@ func handlerHostName(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	name, err := os.Hostname()
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("500 - Something bad happened!"))
-		return
+	//	if err != nil {
+	//		w.WriteHeader(http.StatusInternalServerError)
+	//		w.Write([]byte("500 - Something bad happened!"))
+	//		return
+	//	}
+
+	if r.Method == "POST" {
+		f, err := os.Create("/tmp/4kube.txt")
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(err.Error()))
+			return
+		}
+
+		b, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(err.Error()))
+			return
+		}
+
+		nb, err := f.Write(b)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(err.Error()))
+			return
+		}
+		fmt.Printf("wrote %d bytes\n", nb)
+		f.Sync()
+		f.Close()
+
+	} else {
+		name, err := os.Hostname()
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("500 - Something bad happened!"))
+			return
+		}
+		fmt.Fprintf(w, name)
+		fmt.Fprintf(w, "\nversion ")
+		fmt.Fprintf(w, strconv.Itoa(*version))
+		fmt.Fprintf(w, "\n")
+
+		data, err := ioutil.ReadFile("/tmp/4kube.txt")
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(err.Error()))
+			return
+		}
+		w.Write(data)
+		fmt.Fprintf(w, "\n")
+
 	}
-	fmt.Fprintf(w, name)
-	fmt.Fprintf(w, "\nversion ")
-	fmt.Fprintf(w, strconv.Itoa(*version))
 }
 
 func main() {
