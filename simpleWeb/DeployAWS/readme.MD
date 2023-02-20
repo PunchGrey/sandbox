@@ -1,0 +1,1 @@
+zip -r   deployAWS.zip ./Dockerrun.aws.json .ebextensions

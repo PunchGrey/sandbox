@@ -1,0 +1,7 @@
+.DS_Store
+*.so
+*.pyc
+._*
+.nfs.*
+go.mod
+go.work
