@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"os"
 )
 
 var addr = flag.String("addr", ":8080", "http service address") // Q=17, R=18
@@ -15,6 +16,8 @@ var templ = template.Must(template.New("qr").Parse(templateStr))
 func main() {
 	flag.Parse()
 	http.Handle("/", http.HandlerFunc(QR))
+	http.Handle("/health", http.HandlerFunc(health))
+	http.Handle("/app", http.HandlerFunc(app))
 	fmt.Printf("start web server %s\n", *addr)
 	err := http.ListenAndServe(*addr, nil)
 	if err != nil {
@@ -24,6 +27,22 @@ func main() {
 
 func QR(w http.ResponseWriter, req *http.Request) {
 	templ.Execute(w, req.FormValue("s"))
+}
+
+func getHost() string {
+	host, err := os.Hostname()
+	if err != nil {
+		return fmt.Sprintf("Error get host: %v", err.Error())
+	}
+	return host
+}
+
+func health(w http.ResponseWriter, req *http.Request) {
+	w.Write([]byte(fmt.Sprintf("OK %s", getHost())))
+}
+
+func app(w http.ResponseWriter, req *http.Request) {
+	w.Write([]byte("APPLICATION " + getHost()))
 }
 
 const templateStr = `
