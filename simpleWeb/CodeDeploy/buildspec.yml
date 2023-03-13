@@ -1,0 +1,29 @@
+version: 0.2
+env:
+  variables:
+    AWS_DEFAULT_REGION: "eu-west-1"
+    AWS_ACCOUNT_ID    : "010079335438"
+
+
+phases:
+  install:
+    commands:
+      - echo "Check aws and git version"
+      - aws --version
+      - git --version
+  pre_build:
+    commands:
+      - echo "login and get COMMIT_ID"
+      - aws ecr get-login-password --region ${AWS_ACCOUNT_ID} | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_ACCOUNT_ID}.amazonaws.com
+      - COMMIT_ID=$(git rev-parse --short HEAD)
+  build:
+    commands:
+      - echo "build docker image"
+      - docker build -t simpleweb .
+      - docker tag simpleweb:latest ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/simpleweb:latest
+      - docker tag simpleweb:latest ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/simpleweb:${COMMIT_ID}
+  post_build:
+    commands:
+      - echo "push docker image"
+      - docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/simpleweb:latest
+      - docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/simpleweb:${COMMIT_ID}
